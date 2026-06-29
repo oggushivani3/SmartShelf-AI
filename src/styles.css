@@ -1,0 +1,133 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@source inline("bg-grocery bg-meds bg-beauty text-grocery text-meds text-beauty border-grocery border-meds border-beauty bg-grocery/5 bg-grocery/10 bg-grocery/15 bg-grocery/20 bg-meds/5 bg-meds/10 bg-meds/15 bg-meds/20 bg-beauty/5 bg-beauty/10 bg-beauty/15 bg-beauty/20 border-grocery/10 border-grocery/20 border-grocery/30 border-grocery/40 border-meds/10 border-meds/20 border-meds/30 border-meds/40 border-beauty/10 border-beauty/20 border-beauty/30 border-beauty/40 border-l-beauty glow-grocery glow-meds glow-beauty");
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource/outfit/400.css";
+@import "@fontsource/outfit/600.css";
+@import "@fontsource/outfit/700.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-grocery: var(--grocery);
+  --color-meds: var(--meds);
+  --color-beauty: var(--beauty);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+
+  --color-chart-1: var(--grocery);
+  --color-chart-2: var(--meds);
+  --color-chart-3: var(--beauty);
+  --color-chart-4: var(--warning);
+  --color-chart-5: var(--danger);
+}
+
+:root {
+  --radius: 1rem;
+
+  /* Dark by default - nebula glass */
+  --background: oklch(0.145 0.01 270);
+  --foreground: oklch(0.96 0.005 270);
+  --card: oklch(0.18 0.012 270);
+  --card-foreground: oklch(0.96 0.005 270);
+  --popover: oklch(0.18 0.012 270);
+  --popover-foreground: oklch(0.96 0.005 270);
+  --primary: oklch(0.96 0.005 270);
+  --primary-foreground: oklch(0.145 0.01 270);
+  --secondary: oklch(0.22 0.015 270);
+  --secondary-foreground: oklch(0.96 0.005 270);
+  --muted: oklch(0.22 0.015 270);
+  --muted-foreground: oklch(0.62 0.02 270);
+  --accent: oklch(0.25 0.02 270);
+  --accent-foreground: oklch(0.96 0.005 270);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.98 0.005 270);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.6 0.18 280);
+
+  --grocery: oklch(0.72 0.17 162);
+  --meds: oklch(0.65 0.18 250);
+  --beauty: oklch(0.68 0.2 300);
+  --danger: oklch(0.65 0.22 25);
+  --warning: oklch(0.78 0.16 75);
+  --success: oklch(0.72 0.17 162);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 0%, oklch(0.45 0.18 280 / 0.18), transparent 50%),
+      radial-gradient(ellipse 60% 50% at 80% 30%, oklch(0.5 0.18 200 / 0.12), transparent 50%),
+      radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.55 0.18 160 / 0.1), transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@utility glass-card {
+  background: oklch(1 0 0 / 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid oklch(1 0 0 / 0.08);
+}
+
+@utility glow-grocery {
+  box-shadow: 0 0 60px -10px oklch(0.72 0.17 162 / 0.25);
+}
+
+@utility glow-meds {
+  box-shadow: 0 0 60px -10px oklch(0.65 0.18 250 / 0.25);
+}
+
+@utility glow-beauty {
+  box-shadow: 0 0 60px -10px oklch(0.68 0.2 300 / 0.25);
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+}

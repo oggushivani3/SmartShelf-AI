@@ -12,7 +12,7 @@ import { useAuth, signIn, decodeGoogleJwt } from "@/lib/auth-store";
  *       - http://localhost:5173  (dev)
  *       - Your deployed URL       (prod)
  */
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
+const GOOGLE_CLIENT_ID = "906053573101-3q7guldpskss9egkoiciosll1a356bjt.apps.googleusercontent.com";
 
 export const Route = createFileRoute("/login")({
   head: () => ({

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
@@ -12,10 +12,10 @@ import {
   PackageSearch,
   ScanLine,
   Trash2,
-  SwitchCamera,
   X,
+  ImagePlus,
 } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { addItem } from "@/lib/use-items";
 import { lookupBarcode, type ProductInfo } from "@/lib/barcode-lookup";
@@ -43,13 +43,34 @@ interface ScannedEntry {
   saved: boolean;
 }
 
+/** Detect brand name from barcode prefix for common Indian manufacturers */
+function detectBrandFromBarcode(barcode: string): string {
+  const prefix = barcode.slice(0, 8);
+  const map: Record<string, string> = {
+    "89010633": "Britannia",
+    "89010632": "Britannia",
+    "89010631": "Britannia",
+    "89011501": "Parle",
+    "89011502": "Parle",
+    "89040001": "Amul",
+    "89040002": "Amul",
+    "89045101": "Nestlé India",
+    "89002660": "ITC",
+    "89002661": "ITC",
+    "89000169": "Hindustan Unilever",
+    "89000170": "Hindustan Unilever",
+    "89002200": "Dabur",
+    "89002100": "Godrej",
+    "89001500": "Cadbury",
+  };
+  return map[prefix] || (barcode.startsWith("890") ? "Indian Product" : "");
+}
+
 function Scan() {
-  const navigate = useNavigate();
   const [state, setState] = useState<ScanState>({ status: "idle" });
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanHistory, setScanHistory] = useState<ScannedEntry[]>([]);
 
-  // Form fields for the detected product
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState<Category>("grocery");
@@ -57,104 +78,134 @@ function Scan() {
   const [expiresOn, setExpiresOn] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>();
 
-  // Scanner refs
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const scannerContainerId = "smartshelf-scanner";
-  const isRunningRef = useRef(false);
-  const [useFrontCamera, setUseFrontCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current && isRunningRef.current) {
-      try {
-        await scannerRef.current.stop();
-      } catch {
-        // ignore – may already be stopped
-      }
-      isRunningRef.current = false;
+  const stopScanner = useCallback(() => {
+    if (controlsRef.current) {
+      try { controlsRef.current.stop(); } catch { /* ignore */ }
+      controlsRef.current = null;
     }
   }, []);
+
+  const handleBarcodeFound = useCallback(async (decodedText: string) => {
+    stopScanner();
+    setState({ status: "looking-up", barcode: decodedText });
+
+    const product = await lookupBarcode(decodedText);
+    if (product) {
+      setState({ status: "found", barcode: decodedText, product });
+      setName(product.name);
+      setBrand(product.brand);
+      setCategory(product.category);
+      setQuantity(product.quantity || "");
+      setImageUrl(product.imageUrl);
+      setExpiresOn(product.estimatedExpiryDate || "");
+    } else {
+      setState({ status: "not-found", barcode: decodedText });
+      // For Indian barcodes (890 prefix), try to guess brand
+      const detectedBrand = detectBrandFromBarcode(decodedText);
+      setName("");
+      setBrand(detectedBrand);
+      setCategory("grocery");
+      setQuantity("");
+      setImageUrl(undefined);
+      setExpiresOn("");
+    }
+  }, [stopScanner]);
 
   const startScanner = useCallback(async () => {
     setCameraError(null);
     setState({ status: "scanning" });
-
-    // Cleanup any existing instance
-    await stopScanner();
+    stopScanner();
 
     try {
-      const scanner = new Html5Qrcode(scannerContainerId);
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: useFrontCamera ? "user" : "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1,
-        },
-        async (decodedText) => {
-          // Barcode detected!
-          await stopScanner();
-          setState({ status: "looking-up", barcode: decodedText });
-
-          // Look up the product
-          const product = await lookupBarcode(decodedText);
-          if (product) {
-            setState({ status: "found", barcode: decodedText, product });
-            setName(product.name);
-            setBrand(product.brand);
-            setCategory(product.category);
-            setQuantity(product.quantity || "");
-            setImageUrl(product.imageUrl);
-            setExpiresOn("");
-          } else {
-            setState({ status: "not-found", barcode: decodedText });
-            setName("");
-            setBrand("");
-            setCategory("grocery");
-            setQuantity("");
-            setImageUrl(undefined);
-            setExpiresOn("");
-          }
-        },
-        () => {
-          // QR error callback (nothing found yet) — intentionally silent
-        },
-      );
-      isRunningRef.current = true;
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Could not access camera";
-      if (
-        msg.toLowerCase().includes("permission") ||
-        msg.toLowerCase().includes("denied") ||
-        msg.toLowerCase().includes("notallowed")
-      ) {
-        setCameraError(
-          "Camera permission denied. Please allow camera access in your browser settings and reload.",
-        );
-      } else {
-        setCameraError(msg);
+      if (!readerRef.current) {
+        readerRef.current = new BrowserMultiFormatReader();
       }
+
+      // Get list of video devices
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      // Prefer back camera on mobile
+      const deviceId = devices.find(d =>
+        d.label.toLowerCase().includes("back") ||
+        d.label.toLowerCase().includes("rear") ||
+        d.label.toLowerCase().includes("environment")
+      )?.deviceId ?? devices[devices.length - 1]?.deviceId ?? undefined;
+
+      if (!videoRef.current) return;
+
+      const controls = await readerRef.current.decodeFromVideoDevice(
+        deviceId,
+        videoRef.current,
+        (result, err) => {
+          if (result) {
+            handleBarcodeFound(result.getText());
+          }
+          // NotFoundException is normal when no barcode in frame — ignore it
+          if (err && (err as Error).name !== "NotFoundException") {
+            console.warn("ZXing decode error:", err);
+          }
+        }
+      );
+      controlsRef.current = controls;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not access camera";
+      setCameraError(
+        msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("denied") || msg.toLowerCase().includes("notallowed")
+          ? "Camera permission denied. Please allow camera access in your browser settings and reload."
+          : msg
+      );
       setState({ status: "error", message: msg });
     }
-  }, [stopScanner, useFrontCamera]);
+  }, [stopScanner, handleBarcodeFound]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    stopScanner();
+    setCameraError(null);
+    setState({ status: "looking-up", barcode: "scanning photo..." });
+
+    try {
+      // Draw image onto canvas, then decode from canvas element
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Failed to load image"));
+      });
+
+      const canvas = fileCanvasRef.current!;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(objectUrl);
+
+      const reader = new BrowserMultiFormatReader();
+      const result = await reader.decodeFromCanvas(canvas);
+      await handleBarcodeFound(result.getText());
+    } catch {
+      setCameraError("No barcode found in this photo. Please try a clearer, closer shot of just the barcode.");
+      setState({ status: "error", message: "Barcode not found in image" });
+    }
+  };
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopScanner();
-      if (scannerRef.current) {
-        try {
-          scannerRef.current.clear();
-        } catch {
-          // ignore
-        }
-      }
-    };
+    return () => { stopScanner(); };
   }, [stopScanner]);
 
   const resetScanner = () => {
+    stopScanner();
     setName("");
     setBrand("");
     setCategory("grocery");
@@ -184,29 +235,15 @@ function Scan() {
     resetScanner();
   };
 
-  const toggleCamera = async () => {
-    await stopScanner();
-    setUseFrontCamera((prev) => !prev);
-  };
-
-  // Auto-restart scanner when camera direction changes while scanning
-  useEffect(() => {
-    if (state.status === "scanning" && !isRunningRef.current) {
-      startScanner();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useFrontCamera]);
-
   const isScanning = state.status === "scanning";
-  const hasResult =
-    state.status === "found" || state.status === "not-found";
+  const hasResult = state.status === "found" || state.status === "not-found";
   const isLookingUp = state.status === "looking-up";
 
   return (
     <AppShell>
       <PageHeader
         title="Scan & Track"
-        subtitle="Point your camera at any barcode or QR code."
+        subtitle="Point your camera at a barcode or upload a photo."
         action={
           scanHistory.length > 0 ? (
             <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-grocery/10 border border-grocery/20 text-xs font-semibold text-grocery">
@@ -219,31 +256,31 @@ function Scan() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scanner viewport */}
         <div className="relative aspect-square rounded-3xl overflow-hidden border border-meds/30 bg-black/60">
-          {/* Camera feed renders inside this div */}
-          <div
-            id={scannerContainerId}
-            className="absolute inset-0 [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:rounded-3xl"
+          {/* Hidden canvas for photo scanning */}
+          <canvas ref={fileCanvasRef} className="hidden" />
+
+          {/* Live video element — always in DOM so ZXing can attach */}
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-full object-cover rounded-3xl"
+            style={{ display: isScanning ? "block" : "none" }}
+            muted
+            playsInline
           />
 
-          {/* Overlay when not scanning */}
+          {/* Overlay when not actively scanning */}
           {!isScanning && (
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm grid place-items-center z-10">
               {cameraError ? (
                 <div className="text-center px-6">
                   <CameraOff className="size-12 mx-auto mb-4 text-danger/70" />
-                  <p className="text-sm text-danger font-medium mb-2">
-                    Camera Error
-                  </p>
-                  <p className="text-xs text-muted-foreground max-w-xs">
-                    {cameraError}
-                  </p>
+                  <p className="text-sm text-danger font-medium mb-2">Error</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">{cameraError}</p>
                 </div>
               ) : isLookingUp ? (
                 <div className="text-center">
                   <Loader2 className="size-10 mx-auto mb-3 text-meds animate-spin" />
-                  <p className="text-sm text-meds font-medium">
-                    Looking up product…
-                  </p>
+                  <p className="text-sm text-meds font-medium">Looking up product…</p>
                   <p className="text-xs text-muted-foreground mt-1 font-mono">
                     {state.status === "looking-up" && state.barcode}
                   </p>
@@ -255,49 +292,36 @@ function Scan() {
                       <div className="size-16 rounded-2xl bg-grocery/20 border border-grocery/30 grid place-items-center mx-auto mb-3">
                         <Check className="size-8 text-grocery" />
                       </div>
-                      <p className="text-sm text-grocery font-semibold">
-                        Product Found!
-                      </p>
+                      <p className="text-sm text-grocery font-semibold">Product Found!</p>
                     </>
                   ) : (
                     <>
                       <div className="size-16 rounded-2xl bg-warning/20 border border-warning/30 grid place-items-center mx-auto mb-3">
                         <PackageSearch className="size-8 text-warning" />
                       </div>
-                      <p className="text-sm text-warning font-semibold">
-                        Product not in database
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Fill in the details manually below
-                      </p>
+                      <p className="text-sm text-warning font-semibold">Not in database</p>
+                      <p className="text-xs text-muted-foreground mt-1">Fill in details manually below</p>
                     </>
                   )}
                   <p className="text-xs text-muted-foreground mt-2 font-mono">
-                    Barcode: {state.status === "found" || state.status === "not-found" ? state.barcode : ""}
+                    {(state.status === "found" || state.status === "not-found") ? state.barcode : ""}
                   </p>
                 </div>
               ) : (
                 <div className="text-center">
                   <Camera className="size-12 mx-auto mb-4 text-meds/50" />
-                  <p className="text-sm text-muted-foreground">
-                    Tap "Start Scanner" to begin
-                  </p>
+                  <p className="text-sm text-muted-foreground">Tap "Live Camera" or "Photo" to begin</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Scanning overlay with animated frame */}
+          {/* Scanning crosshair overlay */}
           {isScanning && (
             <div className="absolute inset-0 pointer-events-none z-10">
               <div className="absolute inset-0 grid place-items-center">
-                <div className="relative size-56 sm:size-64">
-                  {[
-                    "top-0 left-0",
-                    "top-0 right-0",
-                    "bottom-0 left-0",
-                    "bottom-0 right-0",
-                  ].map((p, i) => (
+                <div className="relative w-72 h-40">
+                  {["top-0 left-0", "top-0 right-0", "bottom-0 left-0", "bottom-0 right-0"].map((p, i) => (
                     <span
                       key={i}
                       className={`absolute ${p} size-10 border-meds`}
@@ -311,16 +335,11 @@ function Scan() {
                   ))}
                   <motion.div
                     animate={{ y: ["0%", "100%", "0%"] }}
-                    transition={{
-                      duration: 2.5,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }}
+                    transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
                     className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-meds to-transparent shadow-[0_0_20px_rgba(59,130,246,0.7)]"
                   />
                 </div>
               </div>
-
               <div className="absolute top-4 left-4 flex items-center gap-2 text-xs text-meds font-mono uppercase tracking-widest">
                 <span className="size-2 rounded-full bg-meds animate-pulse" />
                 Live Scanner
@@ -328,35 +347,47 @@ function Scan() {
             </div>
           )}
 
-          {/* Bottom controls */}
+          {/* Bottom controls — always visible */}
           <div className="absolute bottom-4 inset-x-4 flex gap-2 z-20">
-            {!isScanning && !isLookingUp ? (
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            {isScanning ? (
+              <>
+                <button
+                  onClick={stopScanner}
+                  className="flex-1 grid grid-cols-[auto_1fr] items-center gap-2 px-4 py-3 rounded-2xl bg-danger/80 text-white font-semibold text-sm"
+                >
+                  <X className="size-4" />
+                  <span className="text-left">Stop Scanner</span>
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-3 rounded-2xl glass-card text-foreground font-semibold text-sm flex items-center gap-2"
+                >
+                  <ImagePlus className="size-4" /> Photo
+                </button>
+              </>
+            ) : !isLookingUp ? (
               <>
                 <button
                   onClick={startScanner}
                   className="flex-1 grid grid-cols-[auto_1fr] items-center gap-2 px-4 py-3 rounded-2xl bg-foreground text-background font-semibold text-sm"
                 >
                   <ScanLine className="size-4" />
-                  <span className="text-left">
-                    {hasResult ? "Scan Another" : "Start Scanner"}
-                  </span>
+                  <span className="text-left">{hasResult ? "Scan Another" : "Live Camera"}</span>
                 </button>
                 <button
-                  onClick={toggleCamera}
-                  className="px-4 py-3 rounded-2xl glass-card text-foreground font-semibold text-sm"
-                  title="Switch camera"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-3 rounded-2xl glass-card text-foreground font-semibold text-sm flex items-center gap-2"
                 >
-                  <SwitchCamera className="size-4" />
+                  <ImagePlus className="size-4" /> Photo
                 </button>
               </>
-            ) : isScanning ? (
-              <button
-                onClick={stopScanner}
-                className="flex-1 grid grid-cols-[auto_1fr] items-center gap-2 px-4 py-3 rounded-2xl bg-danger/80 text-white font-semibold text-sm"
-              >
-                <X className="size-4" />
-                <span className="text-left">Stop Scanner</span>
-              </button>
             ) : null}
           </div>
         </div>
@@ -373,7 +404,6 @@ function Scan() {
                 : "Awaiting Scan"}
           </p>
 
-          {/* Product image if available */}
           {imageUrl && (
             <div className="mb-4 flex justify-center">
               <img
@@ -393,7 +423,6 @@ function Scan() {
               : "Scanned product details will appear here."}
           </p>
 
-          {/* Editable form fields */}
           <div className="space-y-3">
             <FormField label="Name">
               <input
@@ -427,11 +456,7 @@ function Scan() {
                         : "bg-white/5 border-white/10 text-muted-foreground"
                     }`}
                   >
-                    {c === "grocery"
-                      ? "Groceries"
-                      : c === "meds"
-                        ? "Medicines"
-                        : "Cosmetics"}
+                    {c === "grocery" ? "Groceries" : c === "meds" ? "Medicines" : "Cosmetics"}
                   </button>
                 ))}
               </div>
@@ -457,19 +482,14 @@ function Scan() {
               </FormField>
             </div>
 
-            {/* Warning if no expiry set */}
             {hasResult && !expiresOn && (
               <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-warning/10 border border-warning/20 text-xs text-warning">
                 <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                <span>
-                  Set an expiry date so SmartShelf can remind you before it
-                  expires.
-                </span>
+                <span>Set an expiry date so SmartShelf can remind you before it expires.</span>
               </div>
             )}
           </div>
 
-          {/* Action buttons */}
           <div className="grid grid-cols-2 gap-3 mt-6">
             <button
               disabled={!hasResult || !name.trim() || !expiresOn}
@@ -504,9 +524,7 @@ function Scan() {
             className="mt-8"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display font-semibold text-lg">
-                Scan History
-              </h2>
+              <h2 className="font-display font-semibold text-lg">Scan History</h2>
               <button
                 onClick={() => setScanHistory([])}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
@@ -527,12 +545,8 @@ function Scan() {
                     <Check className="size-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">
-                      {entry.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {entry.barcode}
-                    </p>
+                    <p className="text-sm font-semibold truncate">{entry.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{entry.barcode}</p>
                   </div>
                   <span className="text-xs font-semibold text-grocery bg-grocery/10 px-2.5 py-1 rounded-full">
                     Saved ✓
@@ -547,13 +561,7 @@ function Scan() {
   );
 }
 
-function FormField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">

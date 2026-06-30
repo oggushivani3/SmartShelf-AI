@@ -5,6 +5,7 @@ import grocery from "@/assets/cat-grocery.jpg";
 import medicine from "@/assets/cat-medicine.jpg";
 import cosmetic from "@/assets/cat-cosmetic.jpg";
 import { useItems } from "@/lib/use-items";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -68,6 +69,7 @@ const accentMap: Record<Cat["color"], string> = {
 
 function Landing() {
   const items = useItems();
+  const user = useAuth();
   const counts: Record<Cat["color"], number> = {
     grocery: items.filter((i) => i.category === "grocery").length,
     meds: items.filter((i) => i.category === "meds").length,
@@ -92,7 +94,7 @@ function Landing() {
             <a href="#preview" className="hover:text-foreground transition-colors">Preview</a>
           </div>
           <Link
-            to="/dashboard"
+            to={user ? "/dashboard" : "/login"}
             className="px-4 py-2 rounded-full bg-foreground text-background text-sm font-semibold hover:scale-[1.03] transition-transform"
           >
             Launch App
@@ -139,7 +141,7 @@ function Landing() {
             className="flex flex-wrap items-center gap-4"
           >
             <Link
-              to="/dashboard"
+              to={user ? "/dashboard" : "/login"}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-foreground text-background font-semibold hover:scale-[1.03] transition-transform"
             >
               Launch Dashboard <ArrowRight className="size-4" />
@@ -232,7 +234,7 @@ function Landing() {
             check.
           </p>
           <Link
-            to="/dashboard"
+            to={user ? "/dashboard" : "/login"}
             className="relative inline-flex items-center gap-2 px-6 py-3 rounded-full bg-foreground text-background font-semibold hover:scale-[1.03] transition-transform"
           >
             Open Dashboard <ArrowRight className="size-4" />

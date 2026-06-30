@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -9,9 +9,11 @@ import {
   BarChart3,
   AlarmClock,
   Sparkles,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAuth, signOut } from "@/lib/auth-store";
 
 const nav: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
@@ -24,6 +26,13 @@ const nav: { to: string; label: string; icon: LucideIcon }[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const user = useAuth();
+
+  const handleSignOut = () => {
+    signOut();
+    navigate({ to: "/login" });
+  };
 
   return (
     <div className="min-h-screen text-foreground">
@@ -63,7 +72,36 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Bell className="size-5 text-muted-foreground" />
               <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-danger ring-2 ring-background" />
             </Link>
-            <div className="size-9 rounded-full bg-gradient-to-tr from-meds/60 to-beauty/60 border border-white/10" />
+            
+            {user ? (
+              <div className="relative group">
+                <button className="size-9 rounded-full bg-gradient-to-tr from-meds/60 to-beauty/60 border border-white/10 overflow-hidden grid place-items-center cursor-pointer">
+                  {user.photoUrl ? (
+                    <img src={user.photoUrl} alt={user.name} className="size-full object-cover" />
+                  ) : (
+                    <span className="text-sm font-semibold">{user.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </button>
+                
+                {/* Dropdown */}
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-card border border-white/10 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none group-hover:pointer-events-auto">
+                  <div className="p-3 border-b border-white/5">
+                    <p className="text-sm font-semibold truncate">{user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                  <div className="p-1">
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                      <LogOut className="size-4" /> Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="size-9 rounded-full bg-gradient-to-tr from-meds/60 to-beauty/60 border border-white/10" />
+            )}
           </div>
         </div>
       </nav>

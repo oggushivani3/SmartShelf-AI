@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ScanLine, ArrowRight, TrendingUp, AlertTriangle, Package, DollarSign, Plus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { ItemRow } from "@/components/item-row";
 import { useItems } from "@/lib/use-items";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -16,6 +18,15 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
+  const navigate = useNavigate();
+  const user = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      navigate({ to: "/login" });
+    }
+  }, [user, navigate]);
+
   const items = useItems();
   const expiring = [...items].sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 4);
   const expiringCount = items.filter((i) => i.daysLeft <= 7).length;
@@ -26,11 +37,13 @@ function Dashboard() {
     { label: "Efficiency", value: items.length === 0 ? "—" : "84%", icon: TrendingUp, tone: "text-beauty" },
   ];
 
+  if (!user) return null;
+
 
   return (
     <AppShell>
       <PageHeader
-        title="Hello, Alex 👋"
+        title={`Hi, ${user.name} 👋`}
         subtitle={
           items.length === 0
             ? "Your shelf is empty. Add your first item to get started."

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as RemindersRouteImport } from './routes/reminders'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AssistantRouteImport } from './routes/assistant'
@@ -30,6 +31,11 @@ const ScanRoute = ScanRouteImport.update({
 const RemindersRoute = RemindersRouteImport.update({
   id: '/reminders',
   path: '/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryRoute = InventoryRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AssistantRoute
   '/dashboard': typeof DashboardRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/reminders': typeof RemindersRoute
   '/scan': typeof ScanRoute
   '/stats': typeof StatsRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AssistantRoute
   '/dashboard': typeof DashboardRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/reminders': typeof RemindersRoute
   '/scan': typeof ScanRoute
   '/stats': typeof StatsRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/assistant': typeof AssistantRoute
   '/dashboard': typeof DashboardRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/reminders': typeof RemindersRoute
   '/scan': typeof ScanRoute
   '/stats': typeof StatsRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/dashboard'
     | '/inventory'
+    | '/login'
     | '/reminders'
     | '/scan'
     | '/stats'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/dashboard'
     | '/inventory'
+    | '/login'
     | '/reminders'
     | '/scan'
     | '/stats'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/dashboard'
     | '/inventory'
+    | '/login'
     | '/reminders'
     | '/scan'
     | '/stats'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AssistantRoute: typeof AssistantRoute
   DashboardRoute: typeof DashboardRoute
   InventoryRoute: typeof InventoryRoute
+  LoginRoute: typeof LoginRoute
   RemindersRoute: typeof RemindersRoute
   ScanRoute: typeof ScanRoute
   StatsRoute: typeof StatsRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/reminders'
       fullPath: '/reminders'
       preLoaderRoute: typeof RemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistantRoute: AssistantRoute,
   DashboardRoute: DashboardRoute,
   InventoryRoute: InventoryRoute,
+  LoginRoute: LoginRoute,
   RemindersRoute: RemindersRoute,
   ScanRoute: ScanRoute,
   StatsRoute: StatsRoute,
@@ -187,3 +208,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

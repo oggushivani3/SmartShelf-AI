@@ -74,8 +74,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
             
             {user ? (
-              <div className="relative group">
-                <button className="size-9 rounded-full bg-gradient-to-tr from-meds/60 to-beauty/60 border border-white/10 overflow-hidden grid place-items-center cursor-pointer">
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById('user-dropdown');
+                    if (el) el.classList.toggle('hidden');
+                  }}
+                  className="size-9 rounded-full bg-gradient-to-tr from-meds/60 to-beauty/60 border border-white/10 overflow-hidden grid place-items-center cursor-pointer hover:ring-2 hover:ring-white/20 transition-all"
+                >
                   {user.photoUrl ? (
                     <img src={user.photoUrl} alt={user.name} className="size-full object-cover" />
                   ) : (
@@ -84,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </button>
                 
                 {/* Dropdown */}
-                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-card border border-white/10 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none group-hover:pointer-events-auto">
+                <div id="user-dropdown" className="hidden absolute right-0 top-full mt-2 w-48 rounded-xl bg-card border border-white/10 shadow-xl z-50">
                   <div className="p-3 border-b border-white/5">
                     <p className="text-sm font-semibold truncate">{user.name}</p>
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
@@ -92,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <div className="p-1">
                     <button
                       onClick={handleSignOut}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-white/5 rounded-lg transition-colors"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
                     >
                       <LogOut className="size-4" /> Sign Out
                     </button>

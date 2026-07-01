@@ -63,6 +63,9 @@ export function signIn(user: AuthUser) {
 
 /** Clear auth state and sign out. */
 export function signOut() {
+  if (typeof window !== "undefined" && window.google) {
+    window.google.accounts.id.disableAutoSelect();
+  }
   write(null);
 }
 
